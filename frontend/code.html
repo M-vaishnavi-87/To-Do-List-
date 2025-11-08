@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple To-Do App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        body {
+            background-color: #f9f9f9;
+        }
+
+        .todo-container {
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .todo-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .todo-item:last-child {
+            border-bottom: none;
+        }
+
+        .todo-actions button {
+            margin-left: 5px;
+        }
+
+        .edit-input {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="todo-container">
+        <h3 class="text-center mb-4">To-Do List</h3>
+        <div class="input-group mb-3">
+            <input id="todo-input" type="text" class="form-control" placeholder="Enter a task" />
+            <button class="btn btn-primary" onclick="addTodo()">Add</button>
+        </div>
+        <ul id="todo-list" class="list-unstyled"></ul>
+    </div>
+
+
+    <script>
+        let todos = [];
+        async function refreshTodos(){
+            try{
+                const response = await fetch('http://localhost:3000');
+                const originalFormat = await response.json();
+                todos = originalFormat.map(item => ({
+                    Id:item.id||item.Id,
+                    text:item.itemDescription,
+                    editing:false
+                }));
+                renderTodos();
+            }catch(error){
+                console.log("Failed to fetch todos: ",error)
+            }  
+        }
+        document.addEventListener('DOMContentLoaded',refreshTodos);
+
+        function renderTodos() {
+            const list = document.getElementById('todo-list');
+            list.innerHTML = '';
+            todos.forEach((todo, index) => {
+                const li = document.createElement('li');
+                li.className = 'todo-item';
+                if (todo.editing) {
+                    li.innerHTML = `
+            <input class="form-control edit-input" type="text" value="${todo.text}" onkeyup="updateTodo(event, ${todo.Id})" />
+            <div class="todo-actions">
+              <button class="btn btn-success btn-sm" onclick="saveTodo(${index})">Save</button>
+            </div>
+          `;
+                } else {
+                    li.innerHTML = `
+            <span>${todo.text}</span>
+            <div class="todo-actions">
+              <button class="btn btn-sm btn-warning" onclick="editTodo(${index})">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteTodo(${todo.Id})">Delete</button>
+            </div>
+          `;
+                }
+                list.appendChild(li);
+            });
+        }
+
+        async function addTodo() {
+            let inputElement = document.getElementById("todo-input")
+            let text = inputElement.value;
+            if(!text) return;
+            try{
+            await fetch('http://localhost:3000/add-item', {
+                method: 'POST',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+                body: JSON.stringify({ text })
+            });
+            inputElement.value = '';
+            await refreshTodos();
+        }catch(err){
+            console.error("failed to add todo:",err);
+        }
+        }
+
+        async function deleteTodo(id) {
+            if(id == null){
+                console.log("Item Id not found : ",id);
+                return;
+            }
+            try{
+            await fetch(`http://localhost:3000/delete-item/${id}`,{
+                method:'DELETE',
+                headers:{'content-type':'application/json'}
+            });
+            await refreshTodos();
+        }catch(err){
+            console.log("delete failed:",err);
+        }
+        }
+
+        function editTodo(index) {
+            todos[index].editing = true;
+            renderTodos();
+        }
+
+        async function saveTodo(id) {
+            const todoIndex = todos.findIndex(t => t.id === id);
+            if(todoIndex === -1) {
+                console.error("SaveTodo:item not found for Id:",id)
+            }
+            const list = document.getElementById('todo-list');
+            const editInput = list.querySelector(".edit-input");
+            const newDescription = editInput?editInput.value:todos[todoIndex].text;
+            try{
+                await fetch('http://localhost:3000/edit-item', {
+                method: 'PUT',
+                headers: {
+                    'Content-type': 'application/json'
+                },
+                body: JSON.stringify({ id:id, itemDescription: newDescription })
+            });
+            todos[todoIndex].editing = false;
+            await refreshTodos();
+        }catch(err){
+            console.error("Failed to save:",err);
+        }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            let data = await fetch('http://localhost:3000', {
+                method: 'GET',
+                headers: { 'content-type': 'application/json' },
+            })
+            let originalFormat = await data.json();
+            console.log(originalFormat)
+
+            originalFormat.map(item => {
+                console.log('line 68: ',item)
+                todos.push({ Id: item.Id, text: item.itemDescription, editing: false });
+                return todos;
+            });
+            renderTodos();
+        })
+
+        document.addEventListener('DOMContentLoaded',refreshTodos);
+
+        
+    </script>
+</body>
+
+</html>
